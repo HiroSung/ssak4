@@ -90,42 +90,15 @@ kubectl create namespace ssak4
 kubectl config set-context --current --namespace=ssak4
 ```
 
-## kiali 설치
-```console
-
-vi kiali.yaml    
-
-apiVersion: v1
-kind: Secret
-metadata:
-  name: kiali
-  namespace: istio-system
-  labels:
-    app: kiali
-type: Opaque
-data:
-  username: YWRtaW4=
-  passphrase: YWRtaW4=
-
------ save (:wq)
-
-kubectl apply -f kiali.yaml
-helm template --set kiali.enabled=true install/kubernetes/helm/istio --name istio --namespace istio-system > kiali_istio.yaml    
-kubectl apply -f kiali_istio.yaml
-```
-
 ## LoadBalancer로 변경
 ```console
 kubectl edit service/kiali -n istio-system
 (ClusterIP -> LoadBalancer)
+- Exterlan IP 생성
+service/kiali                    LoadBalancer   10.0.67.209    52.141.28.70     20001:31868/TCP  
 ```
 
-## istio enabled
-```console
-kubectl label namespace ssak4 istio-injection=enabled
-```
-
-## siege deploy
+## siege deploy & httpie 설치
 ```console
 cd ssak4/yaml
 kubectl apply -f siege.yaml 
@@ -140,45 +113,49 @@ apt-get install httpie
 cd ssak4/gateway
 mvn package
 ```
-
-- for azure cli
+- docker build & push
 ```console
-docker build -t ssak4acr.azurecr.io/gateway .
+docker build -t ssak4acr.azurecr.io/cleaning:1.0 .
+docker push ssak4acr.azurecr.io/cleaning:1.0
+
+docker build -t ssak4acr.azurecr.io/dashboard:1.0 .
+docker push ssak4acr.azurecr.io/dashboard:1.0
+
+docker build -t ssak4acr.azurecr.io/message:1.0 .
+docker push ssak4acr.azurecr.io/message:1.0
+
+docker build -t ssak4acr.azurecr.io/payment:1.0 .
+docker push ssak4acr.azurecr.io/payment:1.0
+
+docker build -t ssak4acr.azurecr.io/reservation:1.0 .
+docker push ssak4acr.azurecr.io/reservation:1.0
+
+docker build -t ssak4acr.azurecr.io/review:1.0 .
+docker push ssak4acr.azurecr.io/review:1.0
+
+docker build -t ssak4acr.azurecr.io/gateway:1.0 .
+docker push ssak4acr.azurecr.io/gateway:1.0
 docker images
-docker push ssak4acr.azurecr.io/gateway
 ```
 
-## application deploy
+## application deploy (using yaml)
 ```console
 kubectl create ns ssak4
-kubectl label ns ssak4 istio-injection=enabled
-kubectl create deploy gateway --image=ssak4acr.azurecr.io/gateway -n ssak4
-kubectl create deploy reservation --image=ssak4acr.azurecr.io/reservation -n ssak4
-kubectl create deploy cleaning --image=ssak4acr.azurecr.io/cleaning -n ssak4
-kubectl create deploy dashboard --image=ssak4acr.azurecr.io/dashboard -n ssak4
-kubectl create deploy message --image=ssak4acr.azurecr.io/message -n ssak4
-kubectl create deploy payment --image=ssak4acr.azurecr.io/payment -n ssak4
-
-kubectl expose deploy gateway --port=8080 -n ssak4
-kubectl expose deploy reservation --port=8080 -n ssak4
-kubectl expose deploy cleaning --port=8080 -n ssak4
-kubectl expose deploy dashboard --port=8080 -n ssak4
-kubectl expose deploy message --port=8080 -n ssak4
-kubectl expose deploy payment --port=8080 -n ssak4
 
 cd ssak4/yaml
 
 kubectl apply -f configmap.yaml
-kubectl apply -f gateway.yaml
 kubectl apply -f cleaning.yaml
 kubectl apply -f reservation.yaml
 kubectl apply -f payment.yaml
 kubectl apply -f dashboard.yaml
 kubectl apply -f message.yaml
+kubectl apply -f review.yaml
+kubectl apply -f gateway.yaml
 ```
 
 ## DDD 의 적용
-* 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다: (예시는 결제 마이크로서비스).
+* 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다: (예시는 리뷰 마이크로서비스).
   - 가능한 현업에서 사용하는 언어 (유비쿼터스 랭귀지)를 그대로 사용할 수 있지만, 일부 구현에 있어서 영문이 아닌 경우는 실행이 불가능한 경우가 있다 Maven pom.xml, Kafka의 topic id, FeignClient 의 서비스 id 등은 한글로 식별자를 사용하는 경우 오류가 발생하는 것을 확인하였다)
   - 최종적으로는 모두 영문을 사용하였으며, 이는 잠재적인 오류 발생 가능성을 차단하고 향후 확장되는 다양한 서비스들 간에 영향도를 최소화하기 위함이다.
 ```java
@@ -202,7 +179,6 @@ public class Review {
 
     }
 
-
     public Long getId() {
         return id;
     }
@@ -214,39 +190,7 @@ public class Review {
         return requestId;
     }
 
-    public void setRequestId(Long requestId) {
-        this.requestId = requestId;
-    }
-    public String getContent() {
-        return content;
-    }
-
-    public void setContent(String content) {
-        this.content = content;
-    }
-    public String getReviewDate() {
-        return reviewDate;
-    }
-
-    public void setReviewDate(String reviewDate) {
-        this.reviewDate = reviewDate;
-    }
-
-
-
-
-}
-
-
-```
-- Entity Pattern 과 Repository Pattern 을 적용하여 JPA 를 통하여 다양한 데이터소스 유형 (RDB or NoSQL) 에 대한 별도의 처리가 없도록 데이터 접근 어댑터를 자동 생성하기 위하여 Spring Data REST 의 RestRepository 를 적용하였다
-```java
-package CleaningServiceSung;
-
-import org.springframework.data.repository.PagingAndSortingRepository;
-
-public interface ReviewRepository extends PagingAndSortingRepository<Review, Long>{
-
+    ...
 
 }
 ```
@@ -256,49 +200,99 @@ public interface ReviewRepository extends PagingAndSortingRepository<Review, Lon
 # gateway service type 변경
 $ kubectl edit service/gateway -n ssak4
 (ClusterIP -> LoadBalancer)
-
-root@ssak4-vm:~/ssak4/Payment# kubectl get service -n ssak4
-NAME          TYPE           CLUSTER-IP     EXTERNAL-IP    PORT(S)          AGE
-cleaning      ClusterIP      10.0.150.114   <none>         8080/TCP         11h
-dashboard     ClusterIP      10.0.69.44     <none>         8080/TCP         11h
-gateway       LoadBalancer   10.0.56.218    20.196.72.75   8080:32642/TCP   9h
-message       ClusterIP      10.0.255.90    <none>         8080/TCP         8h
-payment       ClusterIP      10.0.64.167    <none>         8080/TCP         8h
-reservation   ClusterIP      10.0.23.111    <none>         8080/TCP         11h
 ```
+```console
+root@ssak4-vm:/home/skccadmin/ssak4/yaml# kubectl get service -n ssak4
+NAME          TYPE           CLUSTER-IP     EXTERNAL-IP    PORT(S)          AGE
+cleaning      ClusterIP      10.0.40.127    <none>         8080/TCP         8m36s
+dashboard     ClusterIP      10.0.164.154   <none>         8080/TCP         6m49s
+gateway       LoadBalancer   10.0.213.207   20.41.104.13   8080:32600/TCP   6m31s
+message       ClusterIP      10.0.73.49     <none>         8080/TCP         6m43s
+payment       ClusterIP      10.0.189.31    <none>         8080/TCP         6m56s
+reservation   ClusterIP      10.0.134.9     <none>         8080/TCP         7m20s
+review        ClusterIP      10.0.223.197   <none>         8080/TCP         6m37s
+```
+
 - API Gateway 적용 확인
 ```console
 //예약
-http POST http://20.196.72.75:8080/cleaningReservations requestDate=20200907 place=seoul status=ReservationApply price=2000 customerName=yeon
-// 청소
-http POST http://20.196.72.75:8080/cleans status=CleaningStarted requestId=1 cleanDate=20200909
-// 예약취소
-http DELETE http://20.196.72.75:8080/cleaningReservations/1
+http POST http://20.41.104.13:8080/cleaningReservations requestDate=20200907 place=seoul status=ReservationApply price=2000 customerName=yeon
+```
+```console
+root@siege:/# http POST http://20.41.104.13:8080/cleaningReservations requestDate=20200907 place=seoul status=ReservationApply price=2000 customerName=yeon
+HTTP/1.1 201 Created
+content-type: application/json;charset=UTF-8
+date: Wed, 09 Sep 2020 12:53:30 GMT
+location: http://Reservation:8080/cleaningReservations/1
+server: envoy
+transfer-encoding: chunked
+x-envoy-upstream-service-time: 1857
+
+{
+    "_links": {
+        "cleaningReservation": {
+            "href": "http://Reservation:8080/cleaningReservations/1"
+        },
+        "self": {
+            "href": "http://Reservation:8080/cleaningReservations/1"
+        }
+    },
+    "customerName": "yeon",
+    "place": "seoul",
+    "price": 2000,
+    "requestDate": "20200907",
+    "status": "ReservationApply"
+}
+```
+```console
+// 리뷰 요청 
+http POST http://20.41.104.13:8080/cleans requestId=1 reviewDate=20200907 status=ReviewComplete
+```
+```console
+root@siege:/# http POST http://20.41.104.13:8080/cleans requestId=1 reviewDate=20200907 status=ReviewComplete
+HTTP/1.1 201 Created
+content-type: application/json;charset=UTF-8
+date: Wed, 09 Sep 2020 13:12:11 GMT
+location: http://Cleaning:8080/cleans/1
+server: envoy
+transfer-encoding: chunked
+x-envoy-upstream-service-time: 460
+
+{
+    "_links": {
+        "clean": {
+            "href": "http://Cleaning:8080/cleans/1"
+        },
+        "self": {
+            "href": "http://Cleaning:8080/cleans/1"
+        }
+    },
+    "cleanDate": null,
+    "requestId": 1,
+    "reviewDate": "20200907",
+    "status": "ReviewComplete"
+}
 ```
 
 - siege 접속
 ```console
-kubectl exec -it siege -n cleaning -- /bin/bash
+kubectl exec -it siege -n ssak4 -- /bin/bash
 ```
 
-- kiali 접속 : http://20.41.120.4:20001/
-  ![kiali](https://user-images.githubusercontent.com/69634194/92501566-b4e22a80-f239-11ea-9657-fd465a38bc48.png)
-
+- kiali 접속 : http://52.141.28.70:20001/
+  ![kiali-ssak4](https://user-images.githubusercontent.com/36612394/92602356-01387380-f2e9-11ea-8dfc-6270fe2550dc.png)
+  
 - (siege 에서) 적용 후 REST API 테스트 
 ```
 # 청소 서비스 예약요청 처리
 http POST http://reservation:8080/cleaningReservations requestDate=20200907 place=seoul status=ReservationApply price=2000 customerName=yeon
 
-# 예약 상태 확인
-http http://reservation:8080/reservations/1
-
-# 예약취소 
-http DELETE http://reservation:8080/cleaningReservations/1
-
 # 청소 결과 등록
 http POST http://cleaning:8080/cleans status=CleaningStarted requestId=1 cleanDate=20200909
-```
 
+# 리뷰 요청
+http POST http://cleaning:8080/cleans requestId=1 reviewDate=20200909 status=ReviewComplete
+```
 
 ## 폴리글랏 퍼시스턴스
 
@@ -309,11 +303,11 @@ http POST http://cleaning:8080/cleans status=CleaningStarted requestId=1 cleanDa
   * 각 마이크로서비스의 특성에 따라 다양한 프로그래밍 언어를 사용하여 구현할 수 있지만, 시간적/환경적 특성상 Java를 이용하여 구현하였다.
 
 ## 동기식 호출 과 Fallback 처리
-분석단계에서의 조건 중 하나로 예약->결제 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
+분석단계에서의 조건 중 하나로 청소->리뷰 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
 
-- 리뷰 서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
+- 리뷰 서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 - configmap 처리
 ```java
-@FeignClient(name="Review", url="${api.url.review}") // http://Review:8080
+@FeignClient(name="Review", url="${api.url.review}")
 public interface ReviewService {
 
     @RequestMapping(method= RequestMethod.POST, path="/reviews")
@@ -333,67 +327,36 @@ public class Review {
     private Long requestId;
     private String content;
     private String reviewDate;
+    private String status;
 
     @PostPersist
     public void onPostPersist(){
-        ReviewCompleted reviewCompleted = new ReviewCompleted();
-        BeanUtils.copyProperties(this, reviewCompleted);
-        reviewCompleted.publishAfterCommit();
 
+        System.out.println("##### Review onPostPersist : " + getStatus());
 
+        if("CleaningReviewed".equals(getStatus())) {
+
+            ReviewCompleted reviewCompleted = new ReviewCompleted();
+            BeanUtils.copyProperties(this, reviewCompleted);
+            reviewCompleted.setRequestId(getRequestId());
+            reviewCompleted.setStatus("ReviewCompleted");
+            reviewCompleted.publishAfterCommit();
+        }
     }
-
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-    public Long getRequestId() {
-        return requestId;
-    }
-
-    public void setRequestId(Long requestId) {
-        this.requestId = requestId;
-    }
-    public String getContent() {
-        return content;
-    }
-
-    public void setContent(String content) {
-        this.content = content;
-    }
-    public String getReviewDate() {
-        return reviewDate;
-    }
-
-    public void setReviewDate(String reviewDate) {
-        this.reviewDate = reviewDate;
-    }
-
-
-
-
-}
 ```
 
-- 호출 시간에 따른 타임 커플링이 발생하며, 결제 시스템이 장애가 나면 주문도 못받는다는 것을 확인
+- 호출 시간에 따른 타임 커플링이 발생하며, 리뷰 시스템이 장애가 나면 리뷰 처리도 못받는다는 것을 확인
 ```
-# 결제 서비스를 잠시 내려놓음
+# 리뷰 서비스를 잠시 내려놓음
 $ kubectl delete -f review.yaml
 
-(TO-DO) 결과
-
-# 예약처리 (siege 에서)
-http POST http://reservation:8080/cleaningReservations requestDate=20200907 place=seoul status=ReservationApply price=250000 customerName=chae #Fail
-http POST http://reservation:8080/cleaningReservations requestDate=20200909 place=pangyo status=ReservationApply price=300000 customerName=noh #Fail
+# 리뷰처리 (siege 에서)
+http POST http://cleaning:8080/cleans requestId=2 reviewDate=20200909 status=ReviewComplete
 
 # 예약처리 시 에러 내용
 HTTP/1.1 500 Internal Server Error
 content-type: application/json;charset=UTF-8
-date: Tue, 08 Sep 2020 15:51:34 GMT
+date: Wed, 09 Sep 2020 13:32:42 GMT
 server: envoy
 transfer-encoding: chunked
 x-envoy-upstream-service-time: 87
@@ -401,7 +364,7 @@ x-envoy-upstream-service-time: 87
 {
     "error": "Internal Server Error",
     "message": "Could not commit JPA transaction; nested exception is javax.persistence.RollbackException: Error while committing the transaction",
-    "path": "/cleaningReservations",
+    "path": "/cleaning",
     "status": 500,
     "timestamp": "2020-09-08T15:51:34.959+0000"
 }
@@ -413,74 +376,86 @@ http DELETE http://reservation:8080/reservations/1 #Success
 root@siege:/# http DELETE http://reservation:8080/reservations/1
 HTTP/1.1 404 Not Found
 content-type: application/hal+json;charset=UTF-8
-date: Tue, 08 Sep 2020 15:52:46 GMT
+date: Wed, 09 Sep 2020 13:42:42 GMT
 server: envoy
 transfer-encoding: chunked
-x-envoy-upstream-service-time: 16
+x-envoy-upstream-service-time: 9
 
 {
     "error": "Not Found",
     "message": "No message available",
     "path": "/reservations/1",
     "status": 404,
-    "timestamp": "2020-09-08T15:52:46.971+0000"
+    "timestamp": "2020-09-09T13:42:42.353+0000"
 }
 
-# 결제서비스 재기동
-$ kubectl apply -f payment.yaml
+# 리뷰서비스 재기동
+$ kubectl apply -f review.yaml
 
 NAME                           READY   STATUS    RESTARTS   AGE
-cleaning-bf474f568-vxl8r       2/2     Running   0          147m
-dashboard-7f7768bb5-7l8wr      2/2     Running   0          145m
-gateway-6dfcbbc84f-rwnsh       2/2     Running   0          47m
-message-69597f6864-mhwx7       2/2     Running   0          147m
-payment-7749f7dc7c-kfjxb       2/2     Running   0          88s
-reservation-775fc6574d-kddgd   2/2     Running   0          153m
-siege                          2/2     Running   0          3h48m
+cleaning-84bcbdfd47-rd6wk      2/2     Running   0          82m
+dashboard-55cd98cbb4-fdqmr     2/2     Running   0          80m
+gateway-7bddd54d5b-7q9bh       2/2     Running   0          80m
+httpie                         2/2     Running   0          70m
+message-68b5d655c-wv5ps        2/2     Running   0          80m
+payment-6b996c687b-n9npw       2/2     Running   0          80m
+reservation-5fc6846fb8-nbkzp   2/2     Running   0          81m
+review-7b59f74c46-h6q6v        2/2     Running   0          108s
+siege                          2/2     Running   0          96m
 
-
-# 예약처리 (siege 에서)
-http POST http://reservation:8080/cleaningReservations requestDate=20200907 place=seoul status=ReservationApply price=250000 customerName=chae #Success
-http POST http://reservation:8080/cleaningReservations requestDate=20200909 place=pangyo status=ReservationApply price=300000 customerName=noh #Success
+# 리뷰등록 (siege 에서)
+http POST http://cleaning:8080/cleans requestId=2 reviewDate=20200909 status=ReviewComplete
+http POST http://cleaning:8080/cleans requestId=2 reviewDate=20200909 status=ReviewComplete
 
 # 처리결과
 HTTP/1.1 201 Created
 content-type: application/json;charset=UTF-8
-date: Tue, 08 Sep 2020 15:58:28 GMT
-location: http://reservation:8080/cleaningReservations/5
+date: Wed, 09 Sep 2020 13:48:00 GMT
+location: http://cleaning:8080/cleans/11
 server: envoy
 transfer-encoding: chunked
-x-envoy-upstream-service-time: 113
+x-envoy-upstream-service-time: 10
 
 {
     "_links": {
-        "cleaningReservation": {
-            "href": "http://reservation:8080/cleaningReservations/5"
+        "clean": {
+            "href": "http://cleaning:8080/cleans/11"
         },
         "self": {
-            "href": "http://reservation:8080/cleaningReservations/5"
+            "href": "http://cleaning:8080/cleans/11"
         }
     },
-    "customerName": "noh",
-    "place": "pangyo",
-    "price": 300000,
-    "requestDate": "20200909",
-    "status": "ReservationApply"
+    "cleanDate": null,
+    "requestId": 2,
+    "reviewDate": "20200909",
+    "status": "ReviewComplete"
 }
 ```
 - 과도한 요청시에 서비스 장애가 도미노 처럼 벌어질 수 있다 (서킷브레이커, 폴백 처리는 운영단계에서 설명)
 
 ## 비동기식 호출과 Eventual Consistency
 - 비동기식 호출 / 시간적 디커플링 / 장애격리 / 최종 (Eventual) 일관성 테스트
-결제가 이루어진 후에 알림 처리는 동기식이 아니라 비 동기식으로 처리하여 알림 시스템의 처리를 위하여 예약이 블로킹 되지 않아도록 처리한다.
+리뷰가 이루어진 후에 알림 처리는 동기식이 아니라 비 동기식으로 처리하여 알림 시스템의 처리를 위하여 예약이 블로킹 되지 않아도록 처리한다.
  
-- 이를 위하여 예약관리, 결제관리에 기록을 남긴 후에 곧바로 완료되었다는 도메인 이벤트를 카프카로 송출한다(Publish)
+- 이를 위하여 리뷰 기록을 남긴 후에 곧바로 완료되었다는 도메인 이벤트를 카프카로 송출한다(Publish)
 ```java
-@Entity
-@Table(name="Payment_table")
-public class Payment {
+package CleaningServiceSung;
 
-...    
+import javax.persistence.*;
+import org.springframework.beans.BeanUtils;
+import java.util.List;
+
+@Entity
+@Table(name="Review_table")
+public class Review {
+
+    @Id
+    @GeneratedValue(strategy=GenerationType.AUTO)
+    private Long id;
+    private Long requestId;
+    private String content;
+    private String reviewDate;
+    private String status;
 
     @PostPersist
     public void onPostPersist(){
@@ -496,11 +471,12 @@ public class Payment {
             reviewCompleted.publishAfterCommit();
         }
 
-
     }
+
 }
+
 ```
-- 알림 서비스에서는 결제승인, 청소완료, 결제취소 이벤트에 대해서 이를 수신하여 자신의 정책을 처리하도록 PolicyHandler 를 구현한다
+- 알림 서비스에서는 리뷰등록완료 이벤트에 대해서 이를 수신하여 자신의 정책을 처리하도록 PolicyHandler 를 구현한다
 ```java
 @Service
 public class PolicyHandler{
@@ -524,20 +500,20 @@ public class PolicyHandler{
 }
 ```
 
-* 알림 시스템은 예약/결제와 완전히 분리되어있으며, 이벤트 수신에 따라 처리되기 때문에, 알림 시스템이 유지보수로 인해 잠시 내려간 상태라도 예약을 받는데 문제가 없다
+* 알림 시스템은 리뷰와 완전히 분리되어있으며, 이벤트 수신에 따라 처리되기 때문에, 알림 시스템이 유지보수로 인해 잠시 내려간 상태라도 예약을 받는데 문제가 없다
 
 ```
 # 알림 서비스를 잠시 내려놓음
 kubectl delete -f message.yaml
 
-# 예약처리 (siege 에서)
-http POST http://reservation:8080/cleaningReservations requestDate=20200907 place=seoul status=ReservationApply price=250000 customerName=chae #Success
-http POST http://reservation:8080/cleaningReservations requestDate=20200909 place=pangyo status=ReservationApply price=300000 customerName=noh #Success
+# 리뷰처리 (siege 에서)
+http POST http://cleaning:8080/cleans requestId=2 reviewDate=20200909 status=ReviewComplete
+http POST http://cleaning:8080/cleans requestId=3 reviewDate=20200910 status=ReviewComplete
 
 # 알림이력 확인 (siege 에서)
 http http://message:8080/messages # 알림이력조회 불가
 
-http: error: ConnectionError: HTTPConnectionPool(host='message', port=8080): Max retries exceeded with url: /messages (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7fae6595deb8>: Failed to establish a new connection: [Errno -2] Name or service not known')) while doing GET request to URL: http://message:8080/messages
+http: error: ConnectionError: HTTPConnectionPool(host='message', port=8080): Max retries exceeded with url: /messages (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f7429fd2eb8>: Failed to establish a new connection: [Errno -2] Name or service not known')) while doing GET request to URL: http://message:8080/messages
 
 # 알림 서비스 기동
 kubectl apply -f message.yaml
@@ -547,7 +523,7 @@ http http://message:8080/messages # 알림이력조회
 
 HTTP/1.1 200 OK
 content-type: application/hal+json;charset=UTF-8
-date: Tue, 08 Sep 2020 16:01:45 GMT
+date: Wed, 09 Sep 2020 13:56:56 GMT
 server: envoy
 transfer-encoding: chunked
 x-envoy-upstream-service-time: 439
@@ -564,8 +540,8 @@ x-envoy-upstream-service-time: 439
                         "href": "http://message:8080/messages/1"
                     }
                 },
-                "requestId": 6,
-                "status": "PaymentCompleted"
+                "requestId": 2,
+                "status": "ReviewCompleted"
             },
             {
                 "_links": {
@@ -576,8 +552,8 @@ x-envoy-upstream-service-time: 439
                         "href": "http://message:8080/messages/2"
                     }
                 },
-                "requestId": 7,
-                "status": "PaymentCompleted"
+                "requestId": 3,
+                "status": "ReviewCompleted"
             }
         ]
     },
@@ -621,48 +597,48 @@ kubectl label namespace ssak4 istio-injection=enabled
 - 동시사용자 100명
 - 60초 동안 실시
 ```console
-siege -v -c100 -t60S -r10 --content-type "application/json" 'http://reservation:8080/cleaningReservations POST {"customerName": "noh","price": 300000,"requestDate": "20200909","status": "ReservationApply"}'
+siege -v -c100 -t60S -r10 --content-type "application/json" 'http://cleaning:8080/cleans POST {"requestId": "3","reviewDate": 20200910,"status": "ReviewComplete"}'
 
-HTTP/1.1 201     1.20 secs:     341 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 201     1.12 secs:     341 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 201     0.14 secs:     341 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 201     1.11 secs:     341 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 201     1.21 secs:     341 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 201     1.20 secs:     341 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 201     1.20 secs:     341 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 201     1.11 secs:     341 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 201     1.21 secs:     341 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 201     0.12 secs:     341 bytes ==> POST http://reservation:8080/cleaningReservations
+HTTP/1.1 201     0.23 secs:     269 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 201     0.11 secs:     269 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 201     0.12 secs:     269 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 201     0.17 secs:     269 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 201     0.10 secs:     269 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 201     0.11 secs:     269 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 201     0.14 secs:     269 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 201     0.09 secs:     269 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 201     0.10 secs:     269 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 201     0.14 secs:     269 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 201     0.12 secs:     269 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 201     0.33 secs:     269 bytes ==> POST http://cleaning:8080/cleans
 
 Lifting the server siege...
-Transactions:                   4719 hits
+Transactions:                  27491 hits
 Availability:                 100.00 %
-Elapsed time:                  59.14 secs
-Data transferred:               1.53 MB
-Response time:                  1.23 secs
-Transaction rate:              79.79 trans/sec
-Throughput:                     0.03 MB/sec
-Concurrency:                   97.95
-Successful transactions:        4719
+Elapsed time:                  59.12 secs
+Data transferred:               7.03 MB
+Response time:                  0.20 secs
+Transaction rate:             465.00 trans/sec
+Throughput:                     0.12 MB/sec
+Concurrency:                   92.90
+Successful transactions:       27502
 Failed transactions:               0
-Longest transaction:            7.29
-Shortest transaction:           0.05
+Longest transaction:            2.27
+Shortest transaction:           0.00
 ```
 * 서킷 브레이킹을 위한 DestinationRule 적용
 ```
 cd ssak4/yaml
 kubectl apply -f review_dr.yaml
 
-# destinationrule.networking.istio.io/dr-payment created
+destinationrule.networking.istio.io/dr-review created
+```
+```
+HTTP/1.1 500     0.68 secs:     262 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 500     0.70 secs:     262 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 500     0.71 secs:     262 bytes ==> POST http://cleaning:8080/cleans
+HTTP/1.1 500     0.72 secs:     262 bytes ==> POST http://cleaning:8080/cleans
 
-HTTP/1.1 500     0.68 secs:     262 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 500     0.70 secs:     262 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 500     0.71 secs:     262 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 500     0.72 secs:     262 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 500     0.92 secs:     262 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 500     0.68 secs:     262 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 500     0.82 secs:     262 bytes ==> POST http://reservation:8080/cleaningReservations
-HTTP/1.1 500     0.71 secs:     262 bytes ==> POST http://reservation:8080/cleaningReservations
 siege aborted due to excessive socket failure; you
 can change the failure threshold in $HOME/.siegerc
 
@@ -692,7 +668,7 @@ kubectl label namespace ssak4 istio-injection=disabled --overwrite
 # namespace/ssak4 labeled
 
 kubectl apply -f reservation.yaml
-kubectl apply -f payment.yaml
+kubectl apply -f review.yaml
 ```
 - 리뷰 서비스 배포시 resource 설정 적용되어 있음
 ```
@@ -710,55 +686,22 @@ kubectl apply -f payment.yaml
 ```console
 kubectl autoscale deploy review -n ssak4 --min=1 --max=3 --cpu-percent=15
 
-# horizontalpodautoscaler.autoscaling/review autoscaled
-
-(TODO) 결과
+horizontalpodautoscaler.autoscaling/review autoscaled
+```
+```console
 root@ssak4-vm:~/ssak4/yaml# kubectl get all -n ssak4
-NAME                               READY   STATUS    RESTARTS   AGE
-pod/cleaning-bf474f568-vxl8r       2/2     Running   0          3h5m
-pod/dashboard-7f7768bb5-7l8wr      2/2     Running   0          3h3m
-pod/gateway-6dfcbbc84f-rwnsh       2/2     Running   0          85m
-pod/message-69597f6864-fjs69       2/2     Running   0          34m
-pod/payment-7749f7dc7c-kfjxb       2/2     Running   0          39m
-pod/reservation-775fc6574d-kddgd   2/2     Running   0          3h12m
-pod/siege                          2/2     Running   0          4h27m
-
-NAME                  TYPE           CLUSTER-IP     EXTERNAL-IP    PORT(S)          AGE
-service/cleaning      ClusterIP      10.0.150.114   <none>         8080/TCP         3h5m
-service/dashboard     ClusterIP      10.0.69.44     <none>         8080/TCP         3h3m
-service/gateway       LoadBalancer   10.0.56.218    20.196.72.75   8080:32642/TCP   85m
-service/message       ClusterIP      10.0.255.90    <none>         8080/TCP         34m
-service/payment       ClusterIP      10.0.64.167    <none>         8080/TCP         39m
-service/reservation   ClusterIP      10.0.23.111    <none>         8080/TCP         3h12m
-
-NAME                          READY   UP-TO-DATE   AVAILABLE   AGE
-deployment.apps/cleaning      1/1     1            1           3h5m
-deployment.apps/dashboard     1/1     1            1           3h3m
-deployment.apps/gateway       1/1     1            1           85m
-deployment.apps/message       1/1     1            1           34m
-deployment.apps/payment       1/1     1            1           39m
-deployment.apps/reservation   1/1     1            1           3h12m
-
-NAME                                     DESIRED   CURRENT   READY   AGE
-replicaset.apps/cleaning-bf474f568       1         1         1       3h5m
-replicaset.apps/dashboard-7f7768bb5      1         1         1       3h3m
-replicaset.apps/gateway-6dfcbbc84f       1         1         1       85m
-replicaset.apps/message-69597f6864       1         1         1       34m
-replicaset.apps/payment-7749f7dc7c       1         1         1       39m
-replicaset.apps/reservation-775fc6574d   1         1         1       3h12m
-
-NAME                                          REFERENCE            TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
-horizontalpodautoscaler.autoscaling/payment   Deployment/payment   3%/15%    1         3         1          55s
+NAME                                         REFERENCE           TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/review   Deployment/review   3%/15%    1         3         1          40s
 ```
 
 - CB 에서 했던 방식대로 워크로드를 3분 동안 걸어준다.
 ```console
-siege -v -c100 -t180S -r10 --content-type "application/json" 'http://reservation:8080/cleaningReservations POST {"customerName": "noh","price": 300000,"requestDate": "20200909","status": "ReservationApply"}'
+siege -v -c100 -t180S -r10 --content-type "application/json" 'http://review:8080/reviews POST {"requestId": "3","reviewDate": 20200910,"status": "ReviewComplete"}'
 ```
 
 - 오토스케일이 어떻게 되고 있는지 모니터링을 걸어둔다
 ```console
-kubectl get deploy payment -n ssak4 -w 
+kubectl get deploy review -n ssak4 -w 
 
 NAME      READY   UP-TO-DATE   AVAILABLE   AGE
 payment   1/1     1            1           43m
@@ -841,33 +784,17 @@ spec:
             timeoutSeconds: 2
             periodSeconds: 5
             failureThreshold: 5
-
----
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: review
-  namespace: ssak4
-  labels:
-    app: review
-spec:
-  ports:
-    - port: 8080
-      targetPort: 8080
-  selector:
-    app: review
 ```
 
 - seige 로 배포작업 직전에 워크로드를 모니터링 함.
 ```console
-siege -v -c1 -t120S -r10 --content-type "application/json" 'http://reservation:8080/cleaningReservations POST {"customerName": "noh","price": 300000,"requestDate": "20200909","status": "ReservationApply"}'
+siege -v -c1 -t120S -r10 --content-type "application/json" 'http://review:8080/reviews POST {"requestId": "3","reviewDate": 20200910,"status": "ReviewComplete"}'
 ```
 
 - 새버전으로의 배포 시작
 ```
 # 컨테이너 이미지 Update (readness, liveness 미설정 상태)
-kubectl apply -f reservation_na.yaml
+kubectl apply -f cleaning_na.yaml
 ```
 
 - seige 의 화면으로 넘어가서 Availability 가 100% 미만으로 떨어졌는지 확인
@@ -892,17 +819,17 @@ Shortest transaction:           0.00
 - 원인은 쿠버네티스가 성급하게 새로 올려진 서비스를 READY 상태로 인식하여 서비스 유입을 진행한 것이기 때문. 이를 막기위해 Readiness Probe 를 설정함:
 ```console
 # deployment.yaml 의 readiness probe 의 설정:
-kubectl apply -f reservation.yaml
+kubectl apply -f cleaning.yaml
 
-NAME                               READY   STATUS    RESTARTS   AGE
-pod/cleaning-bf474f568-vxl8r       2/2     Running   0          4h3m
-pod/dashboard-7f7768bb5-7l8wr      2/2     Running   0          4h1m
-pod/gateway-6dfcbbc84f-rwnsh       2/2     Running   0          143m
-pod/message-69597f6864-fjs69       2/2     Running   0          92m
-pod/payment-7749f7dc7c-kfjxb       2/2     Running   0          97m
-pod/reservation-775fc6574d-nfnxx   1/1     Running   0          3m54s
-pod/siege                          2/2     Running   0          5h24m
-
+NAME                           READY   STATUS    RESTARTS   AGE
+cleaning-84bcbdfd47-bsw9q      1/1     Running   0          46s
+dashboard-55cd98cbb4-fdqmr     2/2     Running   0          118m
+gateway-7bddd54d5b-7q9bh       2/2     Running   0          118m
+httpie                         2/2     Running   0          108m
+message-68b5d655c-9dcs8        2/2     Running   0          28m
+payment-6b996c687b-n9npw       2/2     Running   0          118m
+reservation-5fc6846fb8-nbkzp   2/2     Running   0          118m
+review-7b59f74c46-xj5mv        1/1     Running   0          6m3s
 ```
 - 동일한 시나리오로 재배포 한 후 Availability 확인
 ```console
@@ -933,77 +860,46 @@ metadata:
   name: ssak4-config
   namespace: ssak4
 data:
+  api.url.review: http://review:8080
   api.url.payment: http://payment:8080
 ```
 
-- reservation.yaml (configmap 사용)
+- cleaning.yaml (configmap 사용)
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: reservation
+  name: cleaning
   namespace: ssak4
   labels:
-    app: reservation
+    app: cleaning
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: reservation
+      app: cleaning
   template:
     metadata:
       labels:
-        app: reservation
+        app: cleaning
     spec:
       containers:
-        - name: reservation
-          image: ssak4acr.azurecr.io/reservation:1.0
+        - name: cleaning
+          image: ssak4acr.azurecr.io/cleaning:1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
           env:
-            - name: api.url.payment
+            - name: api.url.review
               valueFrom:
                 configMapKeyRef:
                   name: ssak4-config
-                  key: api.url.payment
-          readinessProbe:
-            httpGet:
-              path: '/actuator/health'
-              port: 8080
-            initialDelaySeconds: 10
-            timeoutSeconds: 2
-            periodSeconds: 5
-            failureThreshold: 10
-          livenessProbe:
-            httpGet:
-              path: '/actuator/health'
-              port: 8080
-            initialDelaySeconds: 120
-            timeoutSeconds: 2
-            periodSeconds: 5
-            failureThreshold: 5
-
----
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: reservation
-  namespace: ssak4
-  labels:
-    app: reservation
-spec:
-  ports:
-    - port: 8080
-      targetPort: 8080
-  selector:
-    app: reservation
+                  key: api.url.review
 ```
 
 - configmap 설정 정보 확인
 ```console
-kubectl describe pod/reservation-775fc6574d-kddgd -n ssak4
+kubectl describe pod/cl-775fc6574d-kddgd -n ssak4
 
 ...중략
 Containers:
