@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cleaning
+  namespace: ssak4
+  labels:
+    app: cleaning
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cleaning
+  template:
+    metadata:
+      labels:
+        app: cleaning
+    spec:
+      containers:
+        - name: cleaning
+          image: ssak4acr.azurecr.io/cleaning:1.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: api.url.payment
+              valueFrom:
+                configMapKeyRef:
+                  name: ssak4-config
+                  key: api.url.payment
+          
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: cleaning
+  namespace: ssak4
+  labels:
+    app: cleaning
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: cleaning
