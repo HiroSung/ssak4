@@ -154,6 +154,38 @@ kubectl apply -f review.yaml
 kubectl apply -f gateway.yaml
 ```
 
+## CQRS 적용
+- 리뷰를 등록하고 정보를가져 오는 부분을 CQRS로 서비스된다.
+```java
+@Service
+public class DashBoardViewViewHandler {
+
+    @Autowired
+    private DashBoardViewRepository dashBoardViewRepository;
+
+    ...
+
+    @StreamListener(KafkaProcessor.INPUT)
+    public void whenReviewCompleted_then_UPDATE_3(@Payload ReviewCompleted reviewCompleted) {
+        try {
+            if (reviewCompleted.isMe()) {
+                // view 객체 조회
+                List<DashBoardView> dashBoardViewList = dashBoardViewRepository.findByRequestId(reviewCompleted.getRequestId());
+                for(DashBoardView dashBoardView : dashBoardViewList){
+                    // view 객체에 이벤트의 eventDirectValue 를 set 함
+                    dashBoardView.setReviewDate(reviewCompleted.getReviewDate());
+                    // view 레파지 토리에 save
+                    dashBoardViewRepository.save(dashBoardView);
+                }
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+    }
+    ...
+}
+```
+
 ## DDD 의 적용
 * 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다: (예시는 리뷰 마이크로서비스).
   - 가능한 현업에서 사용하는 언어 (유비쿼터스 랭귀지)를 그대로 사용할 수 있지만, 일부 구현에 있어서 영문이 아닌 경우는 실행이 불가능한 경우가 있다 Maven pom.xml, Kafka의 topic id, FeignClient 의 서비스 id 등은 한글로 식별자를 사용하는 경우 오류가 발생하는 것을 확인하였다)
@@ -899,26 +931,26 @@ spec:
 
 - configmap 설정 정보 확인
 ```console
-kubectl describe pod/cl-775fc6574d-kddgd -n ssak4
+kubectl describe pod/cleaning-bfc87d78f-7frt2 -n ssak4
 
 ...중략
 Containers:
-  reservation:
-    Container ID:   docker://af733ea1c805029ad0baf5c448981b3b84def8e4c99656638f2560b48b14816e
-    Image:          ssak4acr.azurecr.io/reservation:1.0
-    Image ID:       docker-pullable://ssak4acr.azurecr.io/reservation@sha256:5a9eb3e1b40911025672798628d75de0670f927fccefea29688f9627742e3f6d
+  cleaning:
+    Container ID:   docker://ed6c502a3421b92d64bc13da2e3856ca08233d60d82ab55c95c93f61d9ea848a
+    Image:          ssak4acr.azurecr.io/cleaning:1.0
+    Image ID:       docker-pullable://ssak4acr.azurecr.io/cleaning@sha256:dfe6ab86f913faf7ab35b2881121e444ff332be9263385efa74ae17e77d5f24d
     Port:           8080/TCP
     Host Port:      0/TCP
     State:          Running
-      Started:      Tue, 08 Sep 2020 13:24:05 +0000
+      Started:      Wed, 09 Sep 2020 14:40:45 +0000
     Ready:          True
     Restart Count:  0
     Liveness:       http-get http://:8080/actuator/health delay=120s timeout=2s period=5s #success=1 #failure=5
     Readiness:      http-get http://:8080/actuator/health delay=10s timeout=2s period=5s #success=1 #failure=10
     Environment:
-      api.url.payment:  <set to the key 'api.url.payment' of config map 'ssak4-config'>  Optional: false
+      api.url.review:  <set to the key 'api.url.review' of config map 'ssak4-config'>  Optional: false
     Mounts:
-      /var/run/secrets/kubernetes.io/serviceaccount from default-token-w4fh5 (ro)
+      /var/run/secrets/kubernetes.io/serviceaccount from default-token-qd9hz (ro)
 ...중략
 ```
 
