@@ -1,6 +1,6 @@
-# 청소대행 서비스 - Saak3 v2
+# '리뷰S' 
 
-고객이 청소부의 리뷰를 등록 기능 추가하여 서비스를 재공합니다.
+고객이 청소부의 리뷰를 등록 기능 추가하여 서비스를 제공합니다.
 
 # 서비스 시나리오
   
@@ -9,21 +9,18 @@
 2. 리뷰 등록이 완료되면, 청소부에게 완료되었다고 전달한다 (Async, 알림서비스)
 
 ## 비기능적 요구사항
-### 1. 트랜잭션
-- 리뷰 등록이 완료되지 않은 것은 서비스가 성립되지 않아야 한다 → Sync 호출 
-### 2. 장애격리
-- 통지(알림) 기능이 수행되지 않더라도 예약은 365일 24시간 받을 수 있어야 한다 - Async (event-driven), Eventual Consistency
-- 리뷰서비스가 과중되면 사용자를 잠시동안 받지 않고 리뷰서비스를 잠시후에 하도록 유도한다 → Circuit breaker, fallback
-### 3. 성능
-- 고객이 리뷰를 등록한 상태를 마이페이지(프론트엔드)에서 확인할 수 있어야 한다 → CQRS
-- 리뷰가 등록될때마다 알림을 줄 수 있어야 한다 → Event driven
+  1. 트랜잭션
+    - 리뷰 등록이 완료되지 않은 것은 서비스가 성립되지 않아야 한다 → Sync 호출 
+  2. 장애격리 : 통지(알림) 기능이 수행되지 않더라도 예약은 365일 24시간 받을 수 있어야 한다 - Async (event-driven), Eventual Consistency
+  3. 성능
+   - 고객이 리뷰를 등록한 상태를 마이페이지(프론트엔드)에서 확인할 수 있어야 한다 → CQRS
+   - 리뷰가 등록될때마다 알림을 줄 수 있어야 한다 → Event driven
 
 # 분석/설계
 
-청소처리 후 리뷰 등록건에 대해서 Saga패턴(등록 Req/Resp, 메시지 전달 Pub/Sub)을 적용하여 구현되도록 설계함
+청소결과 리뷰 등록건에 대해서 Saga패턴(등록 Req/Resp, 메시지 전달 Pub/Sub)을 적용하여 구현되도록 설계함
 
-## Event Storming 결과
-  * MSAEz 로 모델링한 이벤트스토밍 결과 : 
+- MSAEz 로 모델링한 이벤트스토밍 결과 : 
   http://www.msaez.io/#/storming/9xoBMpZJLnb8CRZQ5PXP9hgdSPg1/mine/c0a577f2be2e367a4dc926a60d393af8/-MGlMwNaapZzvU4bkEVC
   
 ### 바운디드 컨텍스트로 묶기
@@ -54,10 +51,11 @@
 1. 리뷰 요청에 대해서는 리뷰가 등록 처리되어야만 완료되어 장애격리를 위해 CB를 설치함 (트랜잭션 > 1, 장애격리 > 2)
 2. 리뷰 관련 이벤트를 마이페이지에서 수신하여 View Table 을 구성 (CQRS) (성능 > 1)
     
-# 구현/배포(deploy)
-분석/설계 단계에서 도출된 헥사고날 아키텍처에 따라, 각 BC별로 대변되는 마이크로 서비스들을 스프링부트로 구현하였다. 배포는 아래와 같이 수행한다.
+# 배포 (deploy)
+마이크로 서비스들을 스프링부트로 구현하였다. 배포를 위한 서비스 환경은 Azure Portal과 CLI를 통해서 수행한다.
 
-## Azure Configure
+## Azure 
+- Configure
 ```console
 - Azure (http://portal.azure.com) : admin4@gkn2019hotmail.onmicrosoft.com
 - AZure 포탈에서 리소스 그룹 > 쿠버네티스 서비스 생성 > 컨테이너 레지스트리 생성
@@ -65,32 +63,31 @@
 - 컨테이너 생성( Kubernetes ) : ssak4-aks
 - 레지스트리 생성 : ssak4acr, ssak4acr.azurecr.io
 ```
+- 접속환경
+  > Azure 포탈에서 가상머신 신규 생성 - ubuntu 18.04
 
-## 접속환경
-- Azure 포탈에서 가상머신 신규 생성 - ubuntu 18.04
+- 모듈 설치
+    - kubectl
+    - Azure cli 설치 후 az 로그인 및 인증, 연결
+    - jdk
+    - docker
+    - kafka 
+    - istio : kiali도 함께 설치됨
 
-## 모듈 설치
-- kubectl
-- azure cli 설치 후 az 로그인 및 인증, 연결
-- jdk
-- docker
-- kafka 
-- istio
-
-## Azure 인증
+- Azure 인증
 ```console
-# az login
-# az aks get-credentials --resource-group ssak4-rg --name ssak4-aks
-# az acr login --name ssak4acr --expose-token
+az login
+az aks get-credentials --resource-group ssak4-rg --name ssak4-aks
+az acr login --name ssak4acr --expose-token
 ```
 
-## azure 환경
+- namespace 설정
 ```console
 kubectl create namespace ssak4
 kubectl config set-context --current --namespace=ssak4
 ```
 
-## LoadBalancer로 변경
+- kiali - LoadBalancer로 변경
 ```console
 kubectl edit service/kiali -n istio-system
 (ClusterIP -> LoadBalancer)
@@ -98,7 +95,7 @@ kubectl edit service/kiali -n istio-system
 service/kiali                    LoadBalancer   10.0.67.209    52.141.28.70     20001:31868/TCP  
 ```
 
-## siege deploy & httpie 설치
+- siege deploy & httpie 설치
 ```console
 cd ssak4/yaml
 kubectl apply -f siege.yaml 
@@ -113,29 +110,30 @@ apt-get install httpie
 cd ssak4/gateway
 mvn package
 ```
-- docker build & push
+- image build 
 ```console
 docker build -t ssak4acr.azurecr.io/cleaning:1.0 .
-docker push ssak4acr.azurecr.io/cleaning:1.0
-
 docker build -t ssak4acr.azurecr.io/dashboard:1.0 .
-docker push ssak4acr.azurecr.io/dashboard:1.0
-
 docker build -t ssak4acr.azurecr.io/message:1.0 .
-docker push ssak4acr.azurecr.io/message:1.0
-
 docker build -t ssak4acr.azurecr.io/payment:1.0 .
-docker push ssak4acr.azurecr.io/payment:1.0
-
 docker build -t ssak4acr.azurecr.io/reservation:1.0 .
-docker push ssak4acr.azurecr.io/reservation:1.0
-
 docker build -t ssak4acr.azurecr.io/review:1.0 .
-docker push ssak4acr.azurecr.io/review:1.0
-
 docker build -t ssak4acr.azurecr.io/gateway:1.0 .
+```
+- impage push (to Azure 컨테이너레지스트리)
+```console
+docker push ssak4acr.azurecr.io/cleaning:1.0
+docker push ssak4acr.azurecr.io/dashboard:1.0
+docker push ssak4acr.azurecr.io/message:1.0
+docker push ssak4acr.azurecr.io/payment:1.0
+docker push ssak4acr.azurecr.io/reservation:1.0
+docker push ssak4acr.azurecr.io/review:1.0
 docker push ssak4acr.azurecr.io/gateway:1.0
-docker images
+```
+- impage 확인
+```
+- docker images 또는
+- Azure 포탈에서 '컨테이너레지스트리-리포지토리'에서 생성여부 확인
 ```
 
 ## application deploy (using yaml)
@@ -153,6 +151,8 @@ kubectl apply -f message.yaml
 kubectl apply -f review.yaml
 kubectl apply -f gateway.yaml
 ```
+
+# 구현
 
 ## CQRS 적용
 - 리뷰를 등록하고 정보를가져 오는 부분을 CQRS로 서비스된다.
@@ -207,8 +207,6 @@ public class Review {
         ReviewCompleted reviewCompleted = new ReviewCompleted();
         BeanUtils.copyProperties(this, reviewCompleted);
         reviewCompleted.publishAfterCommit();
-
-
     }
 
     public Long getId() {
@@ -227,12 +225,19 @@ public class Review {
 }
 ```
 
-- API Gateway 적용
+## Gateway를 통한 서비스 라우팅
+gateway 서비스를 통해서 예약, 결재, 청소, 리뷰, 대시보드(마이페이지), 메시지서비스를 라우팅 하게 된다.
+gateway 서비스는 LoadBalancer 타입으로 변경하여 외부에서 접속/서비스 가능하도록 한다.
+
+### API Gateway 적용
+
+- gateway service type 변경
 ```console
-# gateway service type 변경
-$ kubectl edit service/gateway -n ssak4
+kubectl edit service/gateway -n ssak4
 (ClusterIP -> LoadBalancer)
 ```
+
+- gateway service EXTERNAL-IP 확인 
 ```console
 root@ssak4-vm:/home/skccadmin/ssak4/yaml# kubectl get service -n ssak4
 NAME          TYPE           CLUSTER-IP     EXTERNAL-IP    PORT(S)          AGE
@@ -245,39 +250,10 @@ reservation   ClusterIP      10.0.134.9     <none>         8080/TCP         7m20
 review        ClusterIP      10.0.223.197   <none>         8080/TCP         6m37s
 ```
 
-- API Gateway 적용 확인
-```console
-//예약
-http POST http://20.41.104.13:8080/cleaningReservations requestDate=20200907 place=seoul status=ReservationApply price=2000 customerName=yeon
-```
-```console
-root@siege:/# http POST http://20.41.104.13:8080/cleaningReservations requestDate=20200907 place=seoul status=ReservationApply price=2000 customerName=yeon
-HTTP/1.1 201 Created
-content-type: application/json;charset=UTF-8
-date: Wed, 09 Sep 2020 12:53:30 GMT
-location: http://Reservation:8080/cleaningReservations/1
-server: envoy
-transfer-encoding: chunked
-x-envoy-upstream-service-time: 1857
+### API Gateway 적용 확인
 
-{
-    "_links": {
-        "cleaningReservation": {
-            "href": "http://Reservation:8080/cleaningReservations/1"
-        },
-        "self": {
-            "href": "http://Reservation:8080/cleaningReservations/1"
-        }
-    },
-    "customerName": "yeon",
-    "place": "seoul",
-    "price": 2000,
-    "requestDate": "20200907",
-    "status": "ReservationApply"
-}
-```
+- 리뷰 요청 
 ```console
-// 리뷰 요청 
 http POST http://20.41.104.13:8080/cleans requestId=1 reviewDate=20200907 status=ReviewComplete
 ```
 ```console
@@ -310,10 +286,6 @@ x-envoy-upstream-service-time: 460
 ```console
 kubectl exec -it siege -n ssak4 -- /bin/bash
 ```
-
-- kiali 접속 : http://52.141.28.70:20001/
-  ![kiali-ssak4](https://user-images.githubusercontent.com/36612394/92602356-01387380-f2e9-11ea-8dfc-6270fe2550dc.png)
-  
 - (siege 에서) 적용 후 REST API 테스트 
 ```
 # 청소 서비스 예약요청 처리
@@ -325,15 +297,7 @@ http POST http://cleaning:8080/cleans status=CleaningStarted requestId=1 cleanDa
 # 리뷰 요청
 http POST http://cleaning:8080/cleans requestId=1 reviewDate=20200909 status=ReviewComplete
 ```
-
-## 폴리글랏 퍼시스턴스
-
-  * 각 마이크로서비스의 특성에 따라 데이터 저장소를 RDB, DocumentDB/NoSQL 등 다양하게 사용할 수 있지만, 시간적/환경적 특성상 모두 H2 메모리DB를 적용하였다.
-
-## 폴리글랏 프로그래밍
   
-  * 각 마이크로서비스의 특성에 따라 다양한 프로그래밍 언어를 사용하여 구현할 수 있지만, 시간적/환경적 특성상 Java를 이용하여 구현하였다.
-
 ## 동기식 호출 과 Fallback 처리
 분석단계에서의 조건 중 하나로 청소->리뷰 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
 
@@ -366,6 +330,8 @@ public class Review {
 
         System.out.println("##### Review onPostPersist : " + getStatus());
 
+    ...
+
         if("CleaningReviewed".equals(getStatus())) {
 
             ReviewCompleted reviewCompleted = new ReviewCompleted();
@@ -383,7 +349,7 @@ public class Review {
 $ kubectl delete -f review.yaml
 
 # 리뷰처리 (siege 에서)
-http POST http://cleaning:8080/cleans requestId=2 reviewDate=20200909 status=ReviewComplete
+http POST http://cleaning:8080/cleans requestId=2 reviewDate=20200909 status=CleaningReview
 
 # 예약처리 시 에러 내용
 HTTP/1.1 500 Internal Server Error
@@ -396,48 +362,21 @@ x-envoy-upstream-service-time: 87
 {
     "error": "Internal Server Error",
     "message": "Could not commit JPA transaction; nested exception is javax.persistence.RollbackException: Error while committing the transaction",
-    "path": "/cleaning",
+    "path": "/cleans",
     "status": 500,
     "timestamp": "2020-09-08T15:51:34.959+0000"
-}
-
-# 결제서비스 재기동전에 아래의 비동기식 호출 기능 점검 테스트 수행 (siege 에서)
-http DELETE http://reservation:8080/reservations/1 #Success
-
-# 결과
-root@siege:/# http DELETE http://reservation:8080/reservations/1
-HTTP/1.1 404 Not Found
-content-type: application/hal+json;charset=UTF-8
-date: Wed, 09 Sep 2020 13:42:42 GMT
-server: envoy
-transfer-encoding: chunked
-x-envoy-upstream-service-time: 9
-
-{
-    "error": "Not Found",
-    "message": "No message available",
-    "path": "/reservations/1",
-    "status": 404,
-    "timestamp": "2020-09-09T13:42:42.353+0000"
 }
 
 # 리뷰서비스 재기동
 $ kubectl apply -f review.yaml
 
 NAME                           READY   STATUS    RESTARTS   AGE
-cleaning-84bcbdfd47-rd6wk      2/2     Running   0          82m
-dashboard-55cd98cbb4-fdqmr     2/2     Running   0          80m
-gateway-7bddd54d5b-7q9bh       2/2     Running   0          80m
-httpie                         2/2     Running   0          70m
-message-68b5d655c-wv5ps        2/2     Running   0          80m
-payment-6b996c687b-n9npw       2/2     Running   0          80m
-reservation-5fc6846fb8-nbkzp   2/2     Running   0          81m
 review-7b59f74c46-h6q6v        2/2     Running   0          108s
 siege                          2/2     Running   0          96m
 
 # 리뷰등록 (siege 에서)
-http POST http://cleaning:8080/cleans requestId=2 reviewDate=20200909 status=ReviewComplete
-http POST http://cleaning:8080/cleans requestId=2 reviewDate=20200909 status=ReviewComplete
+http POST http://cleaning:8080/cleans requestId=2 reviewDate=20200909 status=CleaningReview
+http POST http://cleaning:8080/cleans requestId=3 reviewDate=20200910 status=CleaningReview
 
 # 처리결과
 HTTP/1.1 201 Created
@@ -464,6 +403,10 @@ x-envoy-upstream-service-time: 10
 }
 ```
 - 과도한 요청시에 서비스 장애가 도미노 처럼 벌어질 수 있다 (서킷브레이커, 폴백 처리는 운영단계에서 설명)
+
+## 모니터링
+- kiali 접속 : http://52.141.28.70:20001/
+  ![kiali-ssak4](https://user-images.githubusercontent.com/36612394/92602356-01387380-f2e9-11ea-8dfc-6270fe2550dc.png)
 
 ## 비동기식 호출과 Eventual Consistency
 - 비동기식 호출 / 시간적 디커플링 / 장애격리 / 최종 (Eventual) 일관성 테스트
@@ -629,7 +572,7 @@ kubectl label namespace ssak4 istio-injection=enabled
 - 동시사용자 100명
 - 60초 동안 실시
 ```console
-siege -v -c100 -t60S -r10 --content-type "application/json" 'http://cleaning:8080/cleans POST {"requestId": "3","reviewDate": 20200910,"status": "ReviewComplete"}'
+siege -v -c100 -t60S -r10 --content-type "application/json" 'http://cleaning:8080/cleans POST {"requestId": "3","reviewDate": 20200910,"status": "CleaningReview"}'
 
 HTTP/1.1 201     0.23 secs:     269 bytes ==> POST http://cleaning:8080/cleans
 HTTP/1.1 201     0.11 secs:     269 bytes ==> POST http://cleaning:8080/cleans
@@ -741,12 +684,12 @@ payment   1/1     1            1           43m
 # siege 부하 적용 후
 root@ssak4-vm:/# kubectl get deploy review -n ssak4 -w
 NAME      READY   UP-TO-DATE   AVAILABLE   AGE
-payment   1/1     1            1           43m
-payment   1/3     1            1           44m
-payment   1/3     1            1           44m
-payment   1/3     3            1           44m
-payment   2/3     3            2           46m
-payment   3/3     3            3           46m
+review   1/1     1            1           43m
+review   1/3     1            1           44m
+review   1/3     1            1           44m
+review   1/3     3            1           44m
+review   2/3     3            2           46m
+review   3/3     3            3           46m
 ```
 - siege 의 로그를 보아도 전체적인 성공률이 높아진 것을 확인 할 수 있다.
 ```console
@@ -765,7 +708,7 @@ Longest transaction:            7.33
 Shortest transaction:           0.01
 ```
 
-## 무정지 재배포 (readness)
+## 무정지 재배포 (liveless, readness)
 - 먼저 무정지 재배포가 100% 되는 것인지 확인하기 위해서 Autoscaler 이나 CB 설정을 제거함 (위의 시나리오에서 제거되었음)
 ```console
 kubectl delete horizontalpodautoscaler.autoscaling/review -n ssak4
@@ -826,7 +769,7 @@ siege -v -c1 -t120S -r10 --content-type "application/json" 'http://review:8080/r
 - 새버전으로의 배포 시작
 ```
 # 컨테이너 이미지 Update (readness, liveness 미설정 상태)
-kubectl apply -f cleaning_na.yaml
+kubectl apply -f reviews_na.yaml
 ```
 
 - seige 의 화면으로 넘어가서 Availability 가 100% 미만으로 떨어졌는지 확인
@@ -892,7 +835,6 @@ metadata:
   name: ssak4-config
   namespace: ssak4
 data:
-  api.url.review: http://review:8080
   api.url.payment: http://payment:8080
 ```
 
