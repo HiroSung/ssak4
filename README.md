@@ -728,21 +728,7 @@ spec:
     matchLabels:
       app: review
   template:
-    metadata:
-      labels:
-        app: review
-    spec:
-      containers:
-        - name: review
-          image: ssak4acr.azurecr.io/review:1.0
-          imagePullPolicy: Always
-          ports:
-            - containerPort: 8080
-          resources:
-            limits:
-              cpu: 500m
-            requests:
-              cpu: 200m
+...
           readinessProbe:
             httpGet:
               path: '/actuator/health'
@@ -791,20 +777,13 @@ Shortest transaction:           0.00
 ```
 
 - 배포기간중 Availability 가 평소 100%에서 98% 대로 떨어지는 것을 확인. 
+
 - 원인은 쿠버네티스가 성급하게 새로 올려진 서비스를 READY 상태로 인식하여 서비스 유입을 진행한 것이기 때문. 이를 막기위해 Readiness Probe 를 설정함:
 ```console
-# deployment.yaml 의 readiness probe 의 설정:
-kubectl apply -f cleaning.yaml
+kubectl apply -f review.yaml
 
 NAME                           READY   STATUS    RESTARTS   AGE
-cleaning-84bcbdfd47-bsw9q      1/1     Running   0          46s
-dashboard-55cd98cbb4-fdqmr     2/2     Running   0          118m
-gateway-7bddd54d5b-7q9bh       2/2     Running   0          118m
-httpie                         2/2     Running   0          108m
-message-68b5d655c-9dcs8        2/2     Running   0          28m
-payment-6b996c687b-n9npw       2/2     Running   0          118m
-reservation-5fc6846fb8-nbkzp   2/2     Running   0          118m
-review-7b59f74c46-xj5mv        1/1     Running   0          6m3s
+review-84bcbdfd47-bsw9q      1/1     Running   0          46s
 ```
 - 동일한 시나리오로 재배포 한 후 Availability 확인
 ```console
@@ -838,6 +817,30 @@ data:
   api.url.payment: http://payment:8080
 ```
 
+```
+root@ssak4-vm:/home/skccadmin/ssak4/yaml# cat configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ssak4-config
+  namespace: ssak4
+data:
+  api.url.review: http://review:8080
+  api.url.payment: http://payment:8080root@ssak4-vm:/home/skccadmin/ssak4/yaml# kubectl describe configmap ssak4-config
+Name:         ssak4-config
+Namespace:    ssak4
+Labels:       <none>
+Annotations:  <none>
+
+Data
+====
+api.url.payment:
+----
+http://payment:8080
+api.url.review:
+----
+http://review:8080
+```
 - cleaning.yaml (configmap 사용)
 ```yaml
 apiVersion: apps/v1
