@@ -30,12 +30,12 @@ public class Clean {
             cleaningConfirmed.publishAfterCommit();
         }
 
-        else if("ReviewComplete".equals(getStatus())) {
+        else if("CleaningReview".equals(getStatus())) {
             CleaningReviewed cleaningReviewed = new CleaningReviewed();
             BeanUtils.copyProperties(this, cleaningReviewed);
 
             cleaningReviewed.setRequestId(getRequestId());
-            cleaningReviewed.setStatus("ReviewCompleted");
+            cleaningReviewed.setStatus("CleaningReviewed");
             cleaningReviewed.publishAfterCommit();
         }
 
