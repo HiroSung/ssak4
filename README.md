@@ -679,7 +679,7 @@ siege -v -c100 -t180S -r10 --content-type "application/json" 'http://review:8080
 kubectl get deploy review -n ssak4 -w 
 
 NAME      READY   UP-TO-DATE   AVAILABLE   AGE
-payment   1/1     1            1           43m
+review   1/1     1            1           43m
 
 # siege 부하 적용 후
 root@ssak4-vm:/# kubectl get deploy review -n ssak4 -w
